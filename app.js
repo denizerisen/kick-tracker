@@ -1,13 +1,24 @@
 const STORAGE_KEY = "kicktracker.kicks";
+const UNSYNCED_KEY = "kicktracker.unsynced"; // ids not yet uploaded
+const DELETED_KEY = "kicktracker.deleted";   // ids not yet deleted remotely
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// A kick is just a timestamp (ms since epoch).
-let kicks = load();
+// A kick is {id, ts}: a uuid and ms since epoch.
+let kicks = load(STORAGE_KEY).map(k => (typeof k === "number" ? { id: crypto.randomUUID(), ts: k } : k));
+let unsynced = new Set(load(UNSYNCED_KEY));
+let deleted = new Set(load(DELETED_KEY));
+// kicks made before cloud sync existed need uploading once
+for (const k of kicks) if (!k.synced) unsynced.add(k.id);
 
-function load() {
+const sb = window.supabase && window.SUPABASE_URL
+  ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY)
+  : null;
+let session = null;
+
+function load(key) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Array.isArray(parsed) ? parsed.filter(Number.isFinite) : [];
+    const parsed = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -15,10 +26,70 @@ function load() {
 
 function save() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(kicks));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(kicks.map(({ id, ts }) => ({ id, ts, synced: true }))));
+    localStorage.setItem(UNSYNCED_KEY, JSON.stringify([...unsynced]));
+    localStorage.setItem(DELETED_KEY, JSON.stringify([...deleted]));
   } catch {
     // storage unavailable; keep working in memory
   }
+}
+
+async function sync() {
+  if (!sb || !session || !navigator.onLine) return;
+  try {
+    if (deleted.size) {
+      const { error } = await sb.from("kicks").delete().in("id", [...deleted]);
+      if (error) throw error;
+      deleted.clear();
+    }
+    const pending = kicks.filter(k => unsynced.has(k.id));
+    if (pending.length) {
+      const rows = pending.map(k => ({ id: k.id, kicked_at: new Date(k.ts).toISOString() }));
+      const { error } = await sb.from("kicks").upsert(rows, { onConflict: "id" });
+      if (error) throw error;
+      unsynced.clear();
+    }
+    const { data, error } = await sb.from("kicks").select("id, kicked_at").limit(100000);
+    if (error) throw error;
+    kicks = data.map(r => ({ id: r.id, ts: new Date(r.kicked_at).getTime() }));
+    save();
+    render();
+  } catch (e) {
+    console.warn("sync failed, will retry", e);
+  }
+}
+
+function renderAuth() {
+  const box = document.getElementById("auth");
+  box.replaceChildren();
+  if (!sb) return;
+  if (session) {
+    box.append(`Synced as ${session.user.email} · `);
+    const out = document.createElement("button");
+    out.type = "button";
+    out.className = "link";
+    out.textContent = "Sign out";
+    out.addEventListener("click", () => sb.auth.signOut());
+    box.append(out);
+    return;
+  }
+  const form = document.createElement("form");
+  const input = document.createElement("input");
+  input.type = "email";
+  input.required = true;
+  input.placeholder = "Email to sync across devices";
+  const btn = document.createElement("button");
+  btn.textContent = "Send login link";
+  form.append(input, btn);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { error } = await sb.auth.signInWithOtp({
+      email: input.value,
+      options: { emailRedirectTo: location.origin + location.pathname },
+    });
+    box.textContent = error ? `Couldn't send link: ${error.message}` : "Check your email for the login link.";
+  });
+  box.append(form);
 }
 
 function dayKey(ts) {
@@ -59,12 +130,12 @@ function drawBars(svg, bars, labelEvery = 1) {
 
 function renderCharts() {
   const byHour = Array.from({ length: 24 }, (_, h) => ({ label: String(h), value: 0 }));
-  for (const ts of kicks) byHour[new Date(ts).getHours()].value++;
+  for (const { ts } of kicks) byHour[new Date(ts).getHours()].value++;
   drawBars(document.getElementById("hourChart"), byHour, 3);
 
   // last 14 days, including days with zero kicks
   const counts = new Map();
-  for (const ts of kicks) counts.set(dayKey(ts), (counts.get(dayKey(ts)) || 0) + 1);
+  for (const { ts } of kicks) counts.set(dayKey(ts), (counts.get(dayKey(ts)) || 0) + 1);
   const days = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
@@ -77,8 +148,8 @@ function renderCharts() {
 function renderRecent() {
   const list = document.getElementById("recent");
   list.replaceChildren();
-  const recent = kicks.map((ts, i) => ({ ts, i })).sort((a, b) => b.ts - a.ts).slice(0, 15);
-  for (const { ts, i } of recent) {
+  const recent = [...kicks].sort((a, b) => b.ts - a.ts).slice(0, 15);
+  for (const { id, ts } of recent) {
     const li = document.createElement("li");
     const when = document.createElement("span");
     when.textContent = new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
@@ -86,35 +157,44 @@ function renderRecent() {
     del.type = "button";
     del.className = "link";
     del.textContent = "delete";
-    del.addEventListener("click", () => { kicks.splice(i, 1); save(); render(); });
+    del.addEventListener("click", () => removeKick(id));
     li.append(when, del);
     list.append(li);
   }
 }
 
 function render() {
-  const today = kicks.filter(ts => dayKey(ts) === dayKey(Date.now())).length;
+  const today = kicks.filter(({ ts }) => dayKey(ts) === dayKey(Date.now())).length;
   document.getElementById("today").textContent = `${today} kick${today === 1 ? "" : "s"} today · ${kicks.length} total`;
   renderCharts();
   renderRecent();
 }
 
-document.getElementById("kick").addEventListener("click", () => {
-  kicks.push(Date.now());
+function removeKick(id) {
+  kicks = kicks.filter(k => k.id !== id);
+  if (unsynced.has(id)) unsynced.delete(id); else deleted.add(id);
   save();
   render();
+  sync();
+}
+
+document.getElementById("kick").addEventListener("click", () => {
+  const k = { id: crypto.randomUUID(), ts: Date.now() };
+  kicks.push(k);
+  unsynced.add(k.id);
+  save();
+  render();
+  sync();
   if (navigator.vibrate) navigator.vibrate(20);
 });
 
 document.getElementById("undo").addEventListener("click", () => {
   if (!kicks.length) return;
-  kicks.splice(kicks.indexOf(Math.max(...kicks)), 1);
-  save();
-  render();
+  removeKick(kicks.reduce((a, b) => (b.ts > a.ts ? b : a)).id);
 });
 
 document.getElementById("export").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(kicks)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(kicks.map(k => k.ts))], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `kicks-${dayKey(Date.now())}.json`;
@@ -128,9 +208,16 @@ document.getElementById("import").addEventListener("change", async (e) => {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data)) throw new Error("not an array");
-    kicks = [...new Set([...kicks, ...data.filter(Number.isFinite)])];
+    const have = new Set(kicks.map(k => k.ts));
+    for (const ts of data.filter(Number.isFinite)) {
+      if (have.has(ts)) continue;
+      const k = { id: crypto.randomUUID(), ts };
+      kicks.push(k);
+      unsynced.add(k.id);
+    }
     save();
     render();
+    sync();
   } catch {
     alert("That file doesn't look like a kick export.");
   }
@@ -138,3 +225,8 @@ document.getElementById("import").addEventListener("change", async (e) => {
 });
 
 render();
+renderAuth();
+if (sb) {
+  sb.auth.onAuthStateChange((_event, s) => { session = s; renderAuth(); sync(); });
+  window.addEventListener("online", sync);
+}
