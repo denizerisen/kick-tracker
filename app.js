@@ -80,17 +80,57 @@ function renderAuth() {
   input.placeholder = "Email to sync across devices";
   const btn = document.createElement("button");
   btn.type = "submit";
-  btn.textContent = "Send login link";
+  btn.textContent = "Send code";
   form.append(input, btn);
+  const msg = document.createElement("p");
+  msg.className = "muted";
+  box.append(form, msg);
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const email = input.value.trim();
+    msg.textContent = "Sending…";
     const { error } = await sb.auth.signInWithOtp({
-      email: input.value,
+      email,
       options: { emailRedirectTo: location.origin + location.pathname },
     });
-    box.textContent = error ? `Couldn't send link: ${error.message}` : "Check your email for the login link.";
+    if (error) { msg.textContent = `Couldn't send: ${error.message}`; return; }
+    showCodeStep(box, email);
   });
-  box.append(form);
+}
+
+// Step 2: type the code from the email (works inside an installed phone app,
+// where the emailed link would open in the browser instead).
+function showCodeStep(box, email) {
+  box.replaceChildren();
+  const form = document.createElement("form");
+  const code = document.createElement("input");
+  code.type = "text";
+  code.inputMode = "numeric";
+  code.autocomplete = "one-time-code";
+  code.required = true;
+  code.pattern = "[0-9]{6,10}";
+  code.placeholder = "Code from email";
+  const btn = document.createElement("button");
+  btn.type = "submit";
+  btn.textContent = "Sign in";
+  form.append(code, btn);
+  const msg = document.createElement("p");
+  msg.className = "muted";
+  msg.textContent = `We emailed ${email}. Enter the code, or just tap the link in the email.`;
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "link";
+  back.textContent = "Use a different email";
+  back.addEventListener("click", renderAuth);
+  box.append(form, msg, back);
+  code.focus();
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { error } = await sb.auth.verifyOtp({ email, token: code.value.trim(), type: "email" });
+    if (error) msg.textContent = `That code didn't work: ${error.message}`;
+  });
 }
 
 function dayKey(ts) {
@@ -287,3 +327,13 @@ document.getElementById("theme").addEventListener("click", () => {
   root.dataset.theme = dark ? "light" : "dark";
   try { localStorage.setItem("kicktracker.theme", root.dataset.theme); } catch {}
 });
+
+// Home-screen shortcut "Log a kick" opens ./?kick=1
+if (new URLSearchParams(location.search).has("kick")) {
+  history.replaceState(null, "", location.pathname);
+  document.getElementById("kick").click();
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
