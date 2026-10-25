@@ -1,5 +1,5 @@
 // Cache the app shell so Kick Tracker opens offline. Bump CACHE when shipping changes.
-const CACHE = "kicktracker-v2";
+const CACHE = "kicktracker-v3";
 const SHELL = [
   "./",
   "index.html",
@@ -8,6 +8,7 @@ const SHELL = [
   "app.js",
   "config.js",
   "manifest.webmanifest",
+  "favicon.svg",
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/apple-touch-icon.png",
