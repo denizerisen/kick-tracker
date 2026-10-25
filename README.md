@@ -2,11 +2,45 @@
 
 A tiny baby kick counter. Tap **Kick!** each time the baby kicks; each tap is saved with its timestamp, and charts show which hours of the day (and which days) have the most kicks.
 
-- No build step, no dependencies: open `index.html`, or host it with GitHub Pages.
-- Data stays in your browser (`localStorage`). Use Export/Import JSON to back up or move devices.
+## Features
+
+- One-tap logging, plus undo for the last kick and a form to log past kicks (date, time, count).
+- Recent-kicks log and two charts: kicks by hour of day and kicks per day.
+- Light/dark theme toggle and an English/Turkish language toggle.
+- Installable PWA with an offline app shell and a home-screen shortcut ("Log a kick", opens `./?kick=1`).
+- Optional sign-in with an emailed one-time code. Signed-in kicks sync across devices through Supabase.
+- Works signed out too: kicks are kept in the browser (`localStorage`) and synced when you sign in. Offline taps are queued and uploaded later.
+- Export/Import JSON to back up or move data.
+
+## Tech
+
+No build step and no dependencies to install: plain `index.html`, `app.js` and `style.css`. The only external script is `supabase-js`, loaded from a CDN.
+
+## Run locally
+
+Serve the folder over HTTP (the service worker and sign-in need it, `file://` won't work):
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open <http://localhost:8000>.
+
+## Deploy
+
+Host the folder as static files, e.g. GitHub Pages. When you ship changes, bump `CACHE` in `sw.js` so installed copies pick up the new files.
+
+## Supabase setup (for sync and sign-in)
+
+1. Create a Supabase project and set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`. The anon key is meant to be public; row-level security keeps each user's data private.
+2. In the SQL Editor, run [supabase-schema.sql](supabase-schema.sql). It creates the `kicks` table and a policy so users can only read and write their own rows.
+3. Enable email auth, and paste [supabase/templates/sign-in-code.html](supabase/templates/sign-in-code.html) into the **Magic Link** (or **Confirm signup**) email template so the email shows the 6-digit `{{ .Token }}` code.
+
+Secrets such as `.env.local` are git-ignored.
 
 ## Roadmap
 
 - Kick-count sessions ("10 kicks in how long?")
 - Other baby events (feeding, sleep, diapers)
-- Optional sync between devices
+- Reminders
+- Share with a partner
