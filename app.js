@@ -107,12 +107,14 @@ async function sync() {
       const rows = pending.map(k => ({ id: k.id, kicked_at: new Date(k.ts).toISOString(), tag: k.tag || null, note: k.note || null }));
       const { error } = await sb.from("kicks").upsert(rows, { onConflict: "id" });
       if (error) throw error;
-      // a kick edited meanwhile is a new object, so it stays queued
-      const current = new Set(kicks);
-      for (const k of pending) if (current.has(k)) unsynced.delete(k.id);
     }
     const { data, error } = await sb.from("kicks").select("id, kicked_at, tag, note").limit(100000);
     if (error) throw error;
+    // a sent kick leaves the queue only once the server returns it, so the count never dips;
+    // a kick edited meanwhile is a new object, so it stays queued
+    const seen = new Set(data.map(r => r.id));
+    const current = new Set(kicks);
+    for (const k of pending) if (current.has(k) && seen.has(k.id)) unsynced.delete(k.id);
     // kicks still queued locally are newer than the server's copy
     const local = kicks.filter(k => unsynced.has(k.id));
     const localIds = new Set(local.map(k => k.id));
