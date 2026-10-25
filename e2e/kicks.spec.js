@@ -84,6 +84,40 @@ test('deletes a kick from recent sessions', async ({ page }) => {
   await expect(today(page)).toHaveText('1kick today · 1 total')
 })
 
+test('opens one session at a time without moving the tapped row or the page', async ({ page }) => {
+  // eight sessions of four kicks, an hour apart
+  await page.evaluate(() => {
+    const now = Date.now()
+    const kicks = []
+    for (let s = 0; s < 8; s++) {
+      for (let i = 0; i < 4; i++) kicks.push({ id: crypto.randomUUID(), ts: now - s * 3600e3 - i * 30e3, synced: true })
+    }
+    localStorage.setItem('kicktracker.kicks', JSON.stringify(kicks))
+  })
+  await page.reload()
+  const rows = page.locator('#recent summary')
+  const top = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().top))
+
+  await rows.nth(0).click()
+  await rows.nth(3).evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  const rowBefore = await top(rows.nth(3))
+  await rows.nth(3).click()
+
+  await expect(page.locator('#recent details[open]')).toHaveCount(1)
+  await expect(page.locator('#recent details').nth(3)).toHaveAttribute('open', '')
+  // closing the open row above used to pull the tapped one up the screen
+  expect(Math.abs((await top(rows.nth(3))) - rowBefore)).toBeLessThanOrEqual(1)
+  // on desktop the list used to grow and push the cards beside it down (measured on the page,
+  // since clicking may scroll)
+  if (!test.info().project.name.includes('phone')) {
+    const pageTop = () => page.locator('.g-past').evaluate((el) => Math.round(el.getBoundingClientRect().top + scrollY))
+    const before = await pageTop()
+    await rows.nth(3).click()
+    await rows.nth(0).click()
+    expect(await pageTop()).toBe(before)
+  }
+})
+
 test("names the baby in the headings and keeps the name", async ({ page }) => {
   await page.getByRole('button', { name: "Add baby's name" }).click()
   await page.getByLabel("Baby's name").fill('Ada')

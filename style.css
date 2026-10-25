@@ -246,6 +246,7 @@ li .link:hover { color: var(--accent-text); }
 }
 .note-input:focus-visible { outline: none; border-bottom-color: var(--ink); }
 
+#recent { overflow-anchor: none; } /* the click handler keeps the tapped row in place itself */
 #recent > li { display: block; padding: 0; }
 #recent details[open] { padding-bottom: 14px; }
 #recent summary {
@@ -288,12 +289,13 @@ details[open] .s-count::after { content: " ▴"; }
   .g-head { grid-area: head; }
   .g-hero { grid-area: hero; margin: 0; }
   .g-past { grid-area: past; }
-  .g-recent { grid-area: recent; align-self: stretch; overflow: hidden; }
+  /* contain: size keeps the card from growing the rows, so opening a session never moves
+     the left column; it takes the left column's height and the list scrolls inside it */
+  .g-recent { grid-area: recent; align-self: stretch; contain: size; display: flex; flex-direction: column; }
+  .g-recent #recent { flex: 1; min-height: 0; overflow-y: auto; }
   .g-hour { grid-area: hour; align-self: stretch; }
   .g-day { grid-area: day; align-self: stretch; }
   .g-foot { grid-area: foot; margin-top: 8px; }
-  /* cap the list so both columns end at about the same height */
-  #recent > li:nth-child(n + 8) { display: none; }
 }
 
 .theme-toggle {

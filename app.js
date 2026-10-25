@@ -451,7 +451,7 @@ function renderLive() {
   box.append(head, tagEditor(s));
 }
 
-const openSessions = new Set(); // first-kick ids of sessions expanded in the list
+let openSession = null; // first-kick id of the one session expanded in the list
 
 function renderRecent() {
   const list = document.getElementById("recent");
@@ -461,12 +461,23 @@ function renderRecent() {
     const key = s.kicks[0].id;
     const li = document.createElement("li");
     const details = document.createElement("details");
-    details.open = openSessions.has(key);
+    details.open = key === openSession;
     details.addEventListener("toggle", () => {
-      if (details.open) openSessions.add(key); else openSessions.delete(key);
+      if (details.open) openSession = key; else if (openSession === key) openSession = null;
     });
 
     const summary = document.createElement("summary");
+    // One open at a time. Closing a row above the tapped one would pull it up the screen,
+    // so scroll back by however far it moved.
+    summary.addEventListener("click", (e) => {
+      e.preventDefault();
+      const before = summary.getBoundingClientRect().top;
+      const opening = !details.open;
+      for (const other of list.querySelectorAll("details[open]")) other.open = false;
+      details.open = opening;
+      list.scrollTop += summary.getBoundingClientRect().top - before;
+      window.scrollBy(0, summary.getBoundingClientRect().top - before);
+    });
     const tag = document.createElement("span");
     tag.className = s.tag ? "s-tag" : "s-tag untagged";
     tag.textContent = s.tag ? t(s.tag) : t("untagged");
