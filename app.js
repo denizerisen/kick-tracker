@@ -79,6 +79,7 @@ function renderAuth() {
   input.required = true;
   input.placeholder = "Email to sync across devices";
   const btn = document.createElement("button");
+  btn.type = "submit";
   btn.textContent = "Send login link";
   form.append(input, btn);
   form.addEventListener("submit", async (e) => {
@@ -105,8 +106,13 @@ function el(name, attrs = {}, text) {
 }
 
 // Generic bar chart: bars = [{label, value}], labelEvery = show every nth label.
-function drawBars(svg, bars, labelEvery = 1) {
+function drawBars(svg, bars, labelEvery = 1, peakIndex = -1) {
   svg.replaceChildren();
+  const defs = el("defs");
+  const grad = el("linearGradient", { id: "bar-grad", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(el("stop", { offset: "0%", class: "stop-a" }), el("stop", { offset: "100%", class: "stop-b" }));
+  defs.append(grad);
+  svg.append(defs);
   const W = 480, H = 220, left = 28, bottom = 24, top = 10;
   const max = Math.max(1, ...bars.map(b => b.value));
   const plotH = H - bottom - top;
@@ -121,7 +127,10 @@ function drawBars(svg, bars, labelEvery = 1) {
   bars.forEach((b, i) => {
     const h = (b.value / max) * plotH;
     const x = left + i * slot;
-    svg.append(el("rect", { x: x + 2, y: top + plotH - h, width: Math.max(1, slot - 4), height: h, rx: 2, class: "bar" }));
+    const cls = `bar${b.value ? " has-data" : ""}${i === peakIndex ? " peak-bar" : ""}`;
+    const rect = el("rect", { x: x + 3, y: top + plotH - Math.max(h, 2), width: Math.max(1, slot - 6), height: Math.max(h, 2), rx: Math.min(6, (slot - 6) / 2), class: cls });
+    rect.append(el("title", {}, `${b.title || b.label}: ${b.value} kick${b.value === 1 ? "" : "s"}`));
+    svg.append(rect);
     if (i % labelEvery === 0) {
       svg.append(el("text", { x: x + slot / 2, y: H - 8, "text-anchor": "middle" }, b.label));
     }
@@ -131,7 +140,14 @@ function drawBars(svg, bars, labelEvery = 1) {
 function renderCharts() {
   const byHour = Array.from({ length: 24 }, (_, h) => ({ label: String(h), value: 0 }));
   for (const { ts } of kicks) byHour[new Date(ts).getHours()].value++;
-  drawBars(document.getElementById("hourChart"), byHour, 3);
+  const hourLabel = h => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+  byHour.forEach((b, h) => { b.title = hourLabel(h); });
+  const peakValue = Math.max(...byHour.map(b => b.value));
+  const peakIndex = peakValue ? byHour.findIndex(b => b.value === peakValue) : -1;
+  document.getElementById("peak").textContent = peakIndex < 0
+    ? "Tap Kick! to start finding the pattern."
+    : `Most active around ${hourLabel(peakIndex)}`;
+  drawBars(document.getElementById("hourChart"), byHour, 3, peakIndex);
 
   // last 14 days, including days with zero kicks
   const counts = new Map();
@@ -165,7 +181,7 @@ function renderRecent() {
 
 function render() {
   const today = kicks.filter(({ ts }) => dayKey(ts) === dayKey(Date.now())).length;
-  document.getElementById("today").textContent = `${today} kick${today === 1 ? "" : "s"} today · ${kicks.length} total`;
+  document.getElementById("today").innerHTML = `<b>${today}</b>kick${today === 1 ? "" : "s"} today · ${kicks.length} total`;
   renderCharts();
   renderRecent();
 }
@@ -185,6 +201,10 @@ document.getElementById("kick").addEventListener("click", () => {
   save();
   render();
   sync();
+  const btn = document.getElementById("kick");
+  btn.classList.remove("pressed");
+  void btn.offsetWidth;
+  btn.classList.add("pressed");
   if (navigator.vibrate) navigator.vibrate(20);
 });
 
