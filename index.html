@@ -19,7 +19,8 @@
     <section>
       <h2>Log a past kick</h2>
       <form id="past" class="row">
-        <input id="pastTime" type="datetime-local" required>
+        <input id="pastDate" type="date" required aria-label="Date">
+        <input id="pastTime" type="time" required aria-label="Time">
         <input id="pastCount" type="number" min="1" max="100" value="1" aria-label="Number of kicks">
         <button type="submit">Add</button>
       </form>

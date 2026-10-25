@@ -188,17 +188,17 @@ document.getElementById("kick").addEventListener("click", () => {
   if (navigator.vibrate) navigator.vibrate(20);
 });
 
+const pastDate = document.getElementById("pastDate");
 const pastTime = document.getElementById("pastTime");
-function resetPastTime() {
+{
   const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  pastTime.value = d.toISOString().slice(0, 16);
+  pastDate.value = dayKey(d.getTime());
+  pastTime.value = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
-resetPastTime();
 
 document.getElementById("past").addEventListener("submit", (e) => {
   e.preventDefault();
-  const ts = new Date(pastTime.value).getTime();
+  const ts = new Date(`${pastDate.value}T${pastTime.value}`).getTime();
   const count = Math.max(1, Math.min(100, parseInt(document.getElementById("pastCount").value, 10) || 1));
   if (!Number.isFinite(ts)) return;
   for (let i = 0; i < count; i++) {
