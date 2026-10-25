@@ -176,27 +176,3 @@ li {
 li:last-child { border-bottom: 0; }
 li .link { color: var(--muted); font-size: 0.8rem; }
 li .link:hover { color: var(--accent-text); }
-
-/* Desktop: two columns. Left = log + history, right = charts. */
-@media (min-width: 900px) {
-  main { max-width: 1040px; padding-top: 48px; }
-  main {
-    display: grid;
-    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
-    grid-template-areas:
-      "head  head"
-      "hero   hour"
-      "past   hour"
-      "recent day"
-      "foot  foot";
-    column-gap: 24px;
-    align-items: start;
-  }
-  .g-head { grid-area: head; }
-  .g-hero { grid-area: hero; margin-top: 0; }
-  .g-past { grid-area: past; }
-  .g-hour { grid-area: hour; margin-top: 0; align-self: stretch; }
-  .g-day { grid-area: day; align-self: stretch; }
-  .g-recent { grid-area: recent; }
-  .g-foot { grid-area: foot; }
-}
