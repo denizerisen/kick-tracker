@@ -210,6 +210,64 @@ li:first-child { border-top: 1px solid var(--line); }
 li .link { color: var(--muted); }
 li .link:hover { color: var(--accent-text); }
 
+/* sessions: tag chips, the live panel under Kick, and the session list */
+#live { max-width: 420px; margin: 16px auto 0; }
+#live:empty { display: none; }
+#live .muted { margin: 0 0 10px; }
+#live .chips { justify-content: center; }
+#live .note-input { text-align: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip, .chip-input {
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.chip:hover { border-color: var(--ink); }
+.chip[aria-pressed="true"] { color: var(--on-ink); background: var(--ink); border-color: var(--ink); }
+.chip-input { width: 9rem; cursor: text; text-transform: none; }
+.note-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 0;
+  font-family: var(--serif);
+  font-size: 0.95rem;
+  font-style: italic;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.note-input:focus-visible { outline: none; border-bottom-color: var(--ink); }
+
+#recent > li { display: block; padding: 0; }
+#recent details[open] { padding-bottom: 14px; }
+#recent summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 12px 0;
+  list-style: none;
+  cursor: pointer;
+}
+#recent summary::-webkit-details-marker { display: none; }
+#recent summary:hover .s-tag { color: var(--accent-text); }
+.s-tag { font-family: var(--serif); font-size: 1.05rem; }
+.s-tag.untagged { color: var(--muted); font-style: italic; }
+.s-count { text-align: right; }
+.s-count::after { content: " ▾"; color: var(--muted); }
+details[open] .s-count::after { content: " ▴"; }
+.s-when { grid-column: 1 / -1; color: var(--muted); font-size: 0.72rem; }
+.s-note { grid-column: 1 / -1; color: var(--muted); font-family: var(--serif); font-style: italic; }
+.kick-list { margin-top: 12px; }
+.kick-list li { padding: 6px 0; font-size: 0.75rem; }
+
 /* Desktop: kick + log on the left, recent kicks on the right, charts side by side below. */
 @media (min-width: 900px) {
   main {
@@ -235,7 +293,7 @@ li .link:hover { color: var(--accent-text); }
   .g-day { grid-area: day; align-self: stretch; }
   .g-foot { grid-area: foot; margin-top: 8px; }
   /* cap the list so both columns end at about the same height */
-  #recent li:nth-child(n + 11) { display: none; }
+  #recent > li:nth-child(n + 8) { display: none; }
 }
 
 .theme-toggle {

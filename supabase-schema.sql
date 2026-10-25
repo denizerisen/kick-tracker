@@ -2,8 +2,13 @@
 create table if not exists public.kicks (
   id uuid primary key,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  kicked_at timestamptz not null
+  kicked_at timestamptz not null,
+  tag text,  -- session context, e.g. "Coffee"; shared by every kick in a session
+  note text
 );
+
+-- for tables created before sessions had tags
+alter table public.kicks add column if not exists tag text, add column if not exists note text;
 
 alter table public.kicks enable row level security;
 

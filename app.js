@@ -2,8 +2,11 @@ const STORAGE_KEY = "kicktracker.kicks";
 const UNSYNCED_KEY = "kicktracker.unsynced"; // ids not yet uploaded
 const DELETED_KEY = "kicktracker.deleted";   // ids not yet deleted remotely
 const SVG_NS = "http://www.w3.org/2000/svg";
+const SESSION_GAP = 10 * 60 * 1000; // kicks closer together than this form one session
+const PRESET_TAGS = ["Coffee", "Breakfast", "Lunch", "Dinner", "Snack", "Resting", "Walking", "Music"];
 
-// A kick is {id, ts}: a uuid and ms since epoch.
+// A kick is {id, ts, tag?, note?}: a uuid, ms since epoch, and its session's context.
+// Kicks are replaced, never mutated, when edited (sync relies on this).
 let kicks = load(STORAGE_KEY).map(k => (typeof k === "number" ? { id: crypto.randomUUID(), ts: k } : k));
 let unsynced = new Set(load(UNSYNCED_KEY));
 let deleted = new Set(load(DELETED_KEY));
@@ -26,7 +29,7 @@ function load(key) {
 
 function save() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(kicks.map(({ id, ts }) => ({ id, ts, synced: true }))));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(kicks.map(({ id, ts, tag, note }) => ({ id, ts, tag, note, synced: true }))));
     localStorage.setItem(UNSYNCED_KEY, JSON.stringify([...unsynced]));
     localStorage.setItem(DELETED_KEY, JSON.stringify([...deleted]));
   } catch {
@@ -83,29 +86,47 @@ async function syncName() {
   }
 }
 
+let syncing = false;
+let syncAgain = false;
+
 async function sync() {
   if (!sb || !session || !navigator.onLine) return;
   syncName();
+  // one run at a time; changes made during a run are sent by a follow-up run
+  if (syncing) { syncAgain = true; return; }
+  syncing = true;
   try {
     if (deleted.size) {
-      const { error } = await sb.from("kicks").delete().in("id", [...deleted]);
+      const ids = [...deleted];
+      const { error } = await sb.from("kicks").delete().in("id", ids);
       if (error) throw error;
-      deleted.clear();
+      for (const id of ids) deleted.delete(id);
     }
     const pending = kicks.filter(k => unsynced.has(k.id));
     if (pending.length) {
-      const rows = pending.map(k => ({ id: k.id, kicked_at: new Date(k.ts).toISOString() }));
+      const rows = pending.map(k => ({ id: k.id, kicked_at: new Date(k.ts).toISOString(), tag: k.tag || null, note: k.note || null }));
       const { error } = await sb.from("kicks").upsert(rows, { onConflict: "id" });
       if (error) throw error;
-      unsynced.clear();
+      // a kick edited meanwhile is a new object, so it stays queued
+      const current = new Set(kicks);
+      for (const k of pending) if (current.has(k)) unsynced.delete(k.id);
     }
-    const { data, error } = await sb.from("kicks").select("id, kicked_at").limit(100000);
+    const { data, error } = await sb.from("kicks").select("id, kicked_at, tag, note").limit(100000);
     if (error) throw error;
-    kicks = data.map(r => ({ id: r.id, ts: new Date(r.kicked_at).getTime() }));
+    // kicks still queued locally are newer than the server's copy
+    const local = kicks.filter(k => unsynced.has(k.id));
+    const localIds = new Set(local.map(k => k.id));
+    kicks = data
+      .filter(r => !localIds.has(r.id) && !deleted.has(r.id))
+      .map(r => ({ id: r.id, ts: new Date(r.kicked_at).getTime(), tag: r.tag || undefined, note: r.note || undefined }))
+      .concat(local);
     save();
     render();
   } catch (e) {
     console.warn("sync failed, will retry", e);
+  } finally {
+    syncing = false;
+    if (syncAgain) { syncAgain = false; sync(); }
   }
 }
 
@@ -305,25 +326,180 @@ function renderCharts() {
   drawBars(document.getElementById("dayChart"), days, 2);
 }
 
+// Sessions aren't stored: they're runs of kicks less than SESSION_GAP apart, oldest first.
+// Their tag and note live on the kicks; the latest kick that has either speaks for the session.
+function sessions() {
+  const out = [];
+  for (const k of [...kicks].sort((a, b) => a.ts - b.ts)) {
+    const last = out[out.length - 1];
+    if (last && k.ts - last.end < SESSION_GAP) {
+      last.kicks.push(k);
+      last.end = k.ts;
+    } else {
+      out.push({ kicks: [k], start: k.ts, end: k.ts });
+    }
+  }
+  for (const s of out) {
+    const tagged = s.kicks.findLast(k => k.tag || k.note);
+    s.tag = tagged?.tag || "";
+    s.note = tagged?.note || "";
+  }
+  return out;
+}
+
+// changes = {tag} and/or {note}; "" clears. Applies to every kick in the session holding kickId.
+function setSessionTag(kickId, changes) {
+  const s = sessions().find(s => s.kicks.some(k => k.id === kickId));
+  if (!s) return;
+  const next = { tag: s.tag, note: s.note, ...changes };
+  const ids = new Set(s.kicks.map(k => k.id));
+  kicks = kicks.map(k => {
+    if (!ids.has(k.id)) return k;
+    unsynced.add(k.id);
+    return { id: k.id, ts: k.ts, tag: next.tag || undefined, note: next.note || undefined };
+  });
+  save();
+  render();
+  sync();
+}
+
+// A kick that joins a session picks up its tag and note.
+function newKick(ts) {
+  let prev = null;
+  for (const k of kicks) if (k.ts <= ts && ts - k.ts < SESSION_GAP && (!prev || k.ts > prev.ts)) prev = k;
+  return { id: crypto.randomUUID(), ts, tag: prev?.tag, note: prev?.note };
+}
+
 // Panels aren't rebuilt while someone is typing in them; committing the edit re-renders.
 function editing(box) {
   return box.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
 }
 
+function timeLabel(ts) {
+  return new Date(ts).toLocaleTimeString(language, { hour: "numeric", minute: "2-digit" });
+}
+
+function tagEditor(s) {
+  const key = s.kicks[0].id;
+  const box = document.createElement("div");
+  box.className = "tag-editor";
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  chips.setAttribute("role", "group");
+  chips.setAttribute("aria-label", t("Session tag"));
+  const custom = [...new Set(kicks.map(k => k.tag).filter(tag => tag && !PRESET_TAGS.includes(tag)))].sort();
+  for (const tag of [...PRESET_TAGS, ...custom]) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = t(tag);
+    chip.setAttribute("aria-pressed", String(tag === s.tag));
+    chip.addEventListener("click", () => setSessionTag(key, { tag: tag === s.tag ? "" : tag }));
+    chips.append(chip);
+  }
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "chip";
+  add.textContent = "+";
+  add.setAttribute("aria-label", t("Add your own tag"));
+  add.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.className = "chip-input";
+    input.maxLength = 40;
+    input.placeholder = t("Your tag");
+    input.setAttribute("aria-label", t("Your tag"));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { input.value = ""; input.blur(); }
+    });
+    input.addEventListener("blur", () => {
+      const tag = input.value.trim();
+      if (tag) setSessionTag(key, { tag }); else input.replaceWith(add);
+    }, { once: true });
+    add.replaceWith(input);
+    input.focus();
+  });
+  chips.append(add);
+
+  const note = document.createElement("input");
+  note.className = "note-input";
+  note.maxLength = 200;
+  note.value = s.note;
+  note.placeholder = t("Add a note");
+  note.setAttribute("aria-label", t("Note for this session"));
+  note.addEventListener("keydown", (e) => { if (e.key === "Enter") note.blur(); });
+  note.addEventListener("change", () => setSessionTag(key, { note: note.value.trim() }));
+  box.append(chips, note);
+  return box;
+}
+
+// While the latest session is still open, offer to tag it right under the Kick button.
+let liveTimer;
+function renderLive() {
+  const box = document.getElementById("live");
+  if (editing(box)) return;
+  clearTimeout(liveTimer);
+  box.replaceChildren();
+  const s = sessions().at(-1);
+  if (!s || Date.now() - s.end >= SESSION_GAP) return;
+  liveTimer = setTimeout(renderLive, s.end + SESSION_GAP - Date.now());
+  const head = document.createElement("p");
+  head.className = "muted";
+  head.textContent = tPlural(s.kicks.length, "This session · {count} kick since {time}", "This session · {count} kicks since {time}", { time: timeLabel(s.start) });
+  box.append(head, tagEditor(s));
+}
+
+const openSessions = new Set(); // first-kick ids of sessions expanded in the list
+
 function renderRecent() {
   const list = document.getElementById("recent");
+  if (editing(list)) return;
   list.replaceChildren();
-  const recent = [...kicks].sort((a, b) => b.ts - a.ts).slice(0, 15);
-  for (const { id, ts } of recent) {
+  for (const s of sessions().reverse().slice(0, 10)) {
+    const key = s.kicks[0].id;
     const li = document.createElement("li");
+    const details = document.createElement("details");
+    details.open = openSessions.has(key);
+    details.addEventListener("toggle", () => {
+      if (details.open) openSessions.add(key); else openSessions.delete(key);
+    });
+
+    const summary = document.createElement("summary");
+    const tag = document.createElement("span");
+    tag.className = s.tag ? "s-tag" : "s-tag untagged";
+    tag.textContent = s.tag ? t(s.tag) : t("untagged");
+    const count = document.createElement("span");
+    count.className = "s-count";
+    count.textContent = tPlural(s.kicks.length, "{count} kick", "{count} kicks");
     const when = document.createElement("span");
-    when.textContent = new Date(ts).toLocaleString(language, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "link";
-    del.textContent = t("delete");
-    del.addEventListener("click", () => removeKick(id));
-    li.append(when, del);
+    when.className = "s-when";
+    const day = new Date(s.start).toLocaleDateString(language, { month: "short", day: "numeric" });
+    const from = timeLabel(s.start), to = timeLabel(s.end);
+    when.textContent = from === to ? `${day} · ${from}` : `${day} · ${from}–${to}`;
+    summary.append(tag, count, when);
+    if (s.note) {
+      const note = document.createElement("span");
+      note.className = "s-note";
+      note.textContent = s.note;
+      summary.append(note);
+    }
+
+    const each = document.createElement("ul");
+    each.className = "kick-list";
+    for (const { id, ts } of [...s.kicks].reverse()) {
+      const row = document.createElement("li");
+      const at = document.createElement("span");
+      at.textContent = new Date(ts).toLocaleTimeString(language, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "link";
+      del.textContent = t("delete");
+      del.addEventListener("click", () => removeKick(id));
+      row.append(at, del);
+      each.append(row);
+    }
+    details.append(summary, tagEditor(s), each);
+    li.append(details);
     list.append(li);
   }
 }
@@ -332,6 +508,7 @@ function render() {
   const today = kicks.filter(({ ts }) => dayKey(ts) === dayKey(Date.now())).length;
   document.getElementById("today").innerHTML = `<b>${today}</b>${t(today === 1 ? "kick today · {total} total" : "kicks today · {total} total", { total: kicks.length })}`;
   renderName();
+  renderLive();
   renderCharts();
   renderRecent();
 }
@@ -345,7 +522,7 @@ function removeKick(id) {
 }
 
 document.getElementById("kick").addEventListener("click", () => {
-  const k = { id: crypto.randomUUID(), ts: Date.now() };
+  const k = newKick(Date.now());
   kicks.push(k);
   unsynced.add(k.id);
   save();
@@ -372,7 +549,7 @@ document.getElementById("past").addEventListener("submit", (e) => {
   const count = Math.max(1, Math.min(100, parseInt(document.getElementById("pastCount").value, 10) || 1));
   if (!Number.isFinite(ts)) return;
   for (let i = 0; i < count; i++) {
-    const k = { id: crypto.randomUUID(), ts: ts + i * 1000 }; // 1s apart so they stay distinct
+    const k = newKick(ts + i * 1000); // 1s apart so they stay distinct
     kicks.push(k);
     unsynced.add(k.id);
   }
@@ -392,7 +569,7 @@ document.getElementById("undo").addEventListener("click", () => {
 });
 
 document.getElementById("export").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(kicks.map(k => k.ts))], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(kicks.map(({ ts, tag, note }) => ({ ts, tag, note })))], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `kicks-${dayKey(Date.now())}.json`;
@@ -407,9 +584,16 @@ document.getElementById("import").addEventListener("change", async (e) => {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data)) throw new Error("not an array");
     const have = new Set(kicks.map(k => k.ts));
-    for (const ts of data.filter(Number.isFinite)) {
-      if (have.has(ts)) continue;
-      const k = { id: crypto.randomUUID(), ts };
+    // older exports are plain timestamps; newer ones are {ts, tag?, note?}
+    for (const item of data) {
+      const { ts, tag, note } = typeof item === "number" ? { ts: item } : (item || {});
+      if (!Number.isFinite(ts) || have.has(ts)) continue;
+      const k = {
+        id: crypto.randomUUID(),
+        ts,
+        tag: typeof tag === "string" && tag ? tag : undefined,
+        note: typeof note === "string" && note ? note : undefined,
+      };
       kicks.push(k);
       unsynced.add(k.id);
     }
