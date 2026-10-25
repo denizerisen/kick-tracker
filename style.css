@@ -261,3 +261,5 @@ li .link:hover { color: var(--accent-text); }
   :root:not([data-theme="light"]) .theme-toggle .sun { display: none; }
   :root:not([data-theme="light"]) .theme-toggle .moon { display: block; }
 }
+
+.lang-toggle { right: 64px; font: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }

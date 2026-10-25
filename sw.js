@@ -1,9 +1,10 @@
 // Cache the app shell so Kick Tracker opens offline. Bump CACHE when shipping changes.
-const CACHE = "kicktracker-v1";
+const CACHE = "kicktracker-v2";
 const SHELL = [
   "./",
   "index.html",
   "style.css",
+  "i18n.js",
   "app.js",
   "config.js",
   "manifest.webmanifest",

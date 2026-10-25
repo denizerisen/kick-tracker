@@ -64,11 +64,11 @@ function renderAuth() {
   box.replaceChildren();
   if (!sb) return;
   if (session) {
-    box.append(`Synced as ${session.user.email} · `);
+    box.append(t("Synced as {email} · ", { email: session.user.email }));
     const out = document.createElement("button");
     out.type = "button";
     out.className = "link";
-    out.textContent = "Sign out";
+    out.textContent = t("Sign out");
     out.addEventListener("click", () => sb.auth.signOut());
     box.append(out);
     return;
@@ -77,10 +77,10 @@ function renderAuth() {
   const input = document.createElement("input");
   input.type = "email";
   input.required = true;
-  input.placeholder = "Email to sync across devices";
+  input.placeholder = t("Email to sync across devices");
   const btn = document.createElement("button");
   btn.type = "submit";
-  btn.textContent = "Send code";
+  btn.textContent = t("Send code");
   form.append(input, btn);
   const msg = document.createElement("p");
   msg.className = "muted";
@@ -89,12 +89,12 @@ function renderAuth() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = input.value.trim();
-    msg.textContent = "Sending…";
+    msg.textContent = t("Sending…");
     const { error } = await sb.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: location.origin + location.pathname },
     });
-    if (error) { msg.textContent = `Couldn't send: ${error.message}`; return; }
+    if (error) { msg.textContent = t("Couldn't send: {error}", { error: error.message }); return; }
     showCodeStep(box, email);
   });
 }
@@ -110,18 +110,18 @@ function showCodeStep(box, email) {
   code.autocomplete = "one-time-code";
   code.required = true;
   code.pattern = "[0-9]{6,10}";
-  code.placeholder = "Code from email";
+  code.placeholder = t("Code from email");
   const btn = document.createElement("button");
   btn.type = "submit";
-  btn.textContent = "Sign in";
+  btn.textContent = t("Sign in");
   form.append(code, btn);
   const msg = document.createElement("p");
   msg.className = "muted";
-  msg.textContent = `We emailed ${email}. Enter the code, or just tap the link in the email.`;
+  msg.textContent = t("We emailed {email}. Enter the code, or just tap the link in the email.", { email });
   const back = document.createElement("button");
   back.type = "button";
   back.className = "link";
-  back.textContent = "Use a different email";
+  back.textContent = t("Use a different email");
   back.addEventListener("click", renderAuth);
   box.append(form, msg, back);
   code.focus();
@@ -129,7 +129,7 @@ function showCodeStep(box, email) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const { error } = await sb.auth.verifyOtp({ email, token: code.value.trim(), type: "email" });
-    if (error) msg.textContent = `That code didn't work: ${error.message}`;
+    if (error) msg.textContent = t("That code didn't work: {error}", { error: error.message });
   });
 }
 
@@ -169,7 +169,7 @@ function drawBars(svg, bars, labelEvery = 1, peakIndex = -1) {
     const x = left + i * slot;
     const cls = `bar${b.value ? " has-data" : ""}${i === peakIndex ? " peak-bar" : ""}`;
     const rect = el("rect", { x: x + 3, y: top + plotH - Math.max(h, 2), width: Math.max(1, slot - 6), height: Math.max(h, 2), rx: Math.min(6, (slot - 6) / 2), class: cls });
-    rect.append(el("title", {}, `${b.title || b.label}: ${b.value} kick${b.value === 1 ? "" : "s"}`));
+    rect.append(el("title", {}, tPlural(b.value, "{title}: {count} kick", "{title}: {count} kicks", { title: b.title || b.label })));
     svg.append(rect);
     if (i % labelEvery === 0) {
       svg.append(el("text", { x: x + slot / 2, y: H - 8, "text-anchor": "middle" }, b.label));
@@ -180,13 +180,13 @@ function drawBars(svg, bars, labelEvery = 1, peakIndex = -1) {
 function renderCharts() {
   const byHour = Array.from({ length: 24 }, (_, h) => ({ label: String(h), value: 0 }));
   for (const { ts } of kicks) byHour[new Date(ts).getHours()].value++;
-  const hourLabel = h => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+  const hourLabel = h => (language === "tr" ? `${String(h).padStart(2, "0")}:00` : `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`);
   byHour.forEach((b, h) => { b.title = hourLabel(h); });
   const peakValue = Math.max(...byHour.map(b => b.value));
   const peakIndex = peakValue ? byHour.findIndex(b => b.value === peakValue) : -1;
   document.getElementById("peak").textContent = peakIndex < 0
-    ? "Tap Kick! to start finding the pattern."
-    : `Most active around ${hourLabel(peakIndex)}`;
+    ? t("Tap Kick! to start finding the pattern.")
+    : t("Most active around {hour}", { hour: hourLabel(peakIndex) });
   drawBars(document.getElementById("hourChart"), byHour, 3, peakIndex);
 
   // last 14 days, including days with zero kicks
@@ -208,11 +208,11 @@ function renderRecent() {
   for (const { id, ts } of recent) {
     const li = document.createElement("li");
     const when = document.createElement("span");
-    when.textContent = new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
+    when.textContent = new Date(ts).toLocaleString(language, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
     const del = document.createElement("button");
     del.type = "button";
     del.className = "link";
-    del.textContent = "delete";
+    del.textContent = t("delete");
     del.addEventListener("click", () => removeKick(id));
     li.append(when, del);
     list.append(li);
@@ -221,7 +221,7 @@ function renderRecent() {
 
 function render() {
   const today = kicks.filter(({ ts }) => dayKey(ts) === dayKey(Date.now())).length;
-  document.getElementById("today").innerHTML = `<b>${today}</b>kick${today === 1 ? "" : "s"} today · ${kicks.length} total`;
+  document.getElementById("today").innerHTML = `<b>${today}</b>${t(today === 1 ? "kick today · {total} total" : "kicks today · {total} total", { total: kicks.length })}`;
   renderCharts();
   renderRecent();
 }
@@ -307,13 +307,16 @@ document.getElementById("import").addEventListener("change", async (e) => {
     render();
     sync();
   } catch {
-    alert("That file doesn't look like a kick export.");
+    alert(t("That file doesn't look like a kick export."));
   }
   e.target.value = "";
 });
 
+applyStatic();
 render();
 renderAuth();
+window.addEventListener("languagechange-app", () => { render(); renderAuth(); });
+document.getElementById("lang").addEventListener("click", () => setLanguage(language === "tr" ? "en" : "tr"));
 if (sb) {
   sb.auth.onAuthStateChange((_event, s) => { session = s; renderAuth(); sync(); });
   window.addEventListener("online", sync);
