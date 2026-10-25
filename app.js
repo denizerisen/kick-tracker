@@ -274,3 +274,12 @@ if (sb) {
   sb.auth.onAuthStateChange((_event, s) => { session = s; renderAuth(); sync(); });
   window.addEventListener("online", sync);
 }
+
+document.getElementById("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme
+    ? root.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("kicktracker.theme", root.dataset.theme); } catch {}
+});
