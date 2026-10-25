@@ -1,0 +1,14 @@
+{
+  "name": "kick-tracker",
+  "private": true,
+  "type": "module",
+  "description": "Dev tools only: the app itself has no dependencies and no build step.",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

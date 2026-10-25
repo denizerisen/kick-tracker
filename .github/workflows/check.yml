@@ -1,0 +1,28 @@
+# Every push to dev or main, and every pull request, runs the end-to-end tests in a real browser, on desktop
+# and phone. A red run means something that used to work broke.
+name: Check
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+          retention-days: 7
