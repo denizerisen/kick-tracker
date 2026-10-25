@@ -230,6 +230,10 @@ document.getElementById("past").addEventListener("submit", (e) => {
   render();
   sync();
   document.getElementById("pastCount").value = 1;
+  // move the form on by a minute, ready for the next remembered kick
+  const next = new Date(ts + 60 * 1000);
+  pastDate.value = dayKey(next.getTime());
+  pastTime.value = `${String(next.getHours()).padStart(2, "0")}:${String(next.getMinutes()).padStart(2, "0")}`;
 });
 
 document.getElementById("undo").addEventListener("click", () => {
