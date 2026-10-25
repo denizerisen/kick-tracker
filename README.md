@@ -28,6 +28,19 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000>.
 
+## Tests
+
+End-to-end tests in a real browser, on a desktop and a phone (Playwright). They never touch Supabase:
+sync is tested against a small stand-in (`e2e/fake-supabase.js`).
+
+```sh
+npm install
+npx playwright install chromium
+npm test
+```
+
+GitHub Actions runs them on every push to `dev` or `main` and every pull request.
+
 ## Deploy
 
 Host the folder as static files, e.g. GitHub Pages. When you ship changes, bump `CACHE` in `sw.js` so installed copies pick up the new files.
