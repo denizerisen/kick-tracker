@@ -188,6 +188,30 @@ document.getElementById("kick").addEventListener("click", () => {
   if (navigator.vibrate) navigator.vibrate(20);
 });
 
+const pastTime = document.getElementById("pastTime");
+function resetPastTime() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  pastTime.value = d.toISOString().slice(0, 16);
+}
+resetPastTime();
+
+document.getElementById("past").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const ts = new Date(pastTime.value).getTime();
+  const count = Math.max(1, Math.min(100, parseInt(document.getElementById("pastCount").value, 10) || 1));
+  if (!Number.isFinite(ts)) return;
+  for (let i = 0; i < count; i++) {
+    const k = { id: crypto.randomUUID(), ts: ts + i * 1000 }; // 1s apart so they stay distinct
+    kicks.push(k);
+    unsynced.add(k.id);
+  }
+  save();
+  render();
+  sync();
+  document.getElementById("pastCount").value = 1;
+});
+
 document.getElementById("undo").addEventListener("click", () => {
   if (!kicks.length) return;
   removeKick(kicks.reduce((a, b) => (b.ts > a.ts ? b : a)).id);

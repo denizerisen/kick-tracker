@@ -17,6 +17,15 @@
     <p><button id="undo" type="button" class="link">Undo last kick</button></p>
 
     <section>
+      <h2>Log a past kick</h2>
+      <form id="past" class="row">
+        <input id="pastTime" type="datetime-local" required>
+        <input id="pastCount" type="number" min="1" max="100" value="1" aria-label="Number of kicks">
+        <button type="submit">Add</button>
+      </form>
+    </section>
+
+    <section>
       <h2>When does the baby kick most?</h2>
       <p class="muted">Kicks by hour of day, all days combined.</p>
       <svg id="hourChart" viewBox="0 0 480 220" role="img" aria-label="Kicks by hour of day"></svg>
