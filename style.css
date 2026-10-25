@@ -190,3 +190,31 @@ li {
 li:first-child { border-top: 1px solid var(--line); }
 li .link { color: var(--muted); }
 li .link:hover { color: var(--accent-text); }
+
+/* Desktop: kick + log on the left, recent kicks on the right, charts side by side below. */
+@media (min-width: 900px) {
+  main {
+    max-width: 1040px;
+    padding-top: 48px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "head  head"
+      "hero  recent"
+      "past  recent"
+      "hour  day"
+      "foot  foot";
+    gap: 20px 24px;
+    align-items: start;
+  }
+  main > .card { margin-top: 0; }
+  .g-head { grid-area: head; }
+  .g-hero { grid-area: hero; margin: 0; }
+  .g-past { grid-area: past; }
+  .g-recent { grid-area: recent; align-self: stretch; overflow: hidden; }
+  .g-hour { grid-area: hour; align-self: stretch; }
+  .g-day { grid-area: day; align-self: stretch; }
+  .g-foot { grid-area: foot; margin-top: 8px; }
+  /* cap the list so both columns end at about the same height */
+  #recent li:nth-child(n + 11) { display: none; }
+}

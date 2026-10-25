@@ -9,19 +9,19 @@
 </head>
 <body>
   <main>
-    <header>
+    <header class="g-head">
       <h1>Kick Tracker</h1>
       <p class="subtitle">Every little movement, remembered.</p>
       <div id="auth" class="muted"></div>
     </header>
 
-    <div class="hero">
+    <div class="hero g-hero">
       <button id="kick" type="button" aria-label="Log a kick"><span>Kick!</span></button>
       <p id="today"></p>
       <button id="undo" type="button" class="link">Undo last kick</button>
     </div>
 
-    <section class="card">
+    <section class="card g-past">
       <h2>Log a past kick</h2>
       <form id="past" class="row">
         <input id="pastDate" type="date" required aria-label="Date">
@@ -31,24 +31,24 @@
       </form>
     </section>
 
-    <section class="card">
+    <section class="card g-hour">
       <h2>When does the baby kick most?</h2>
       <p id="peak" class="peak">Kicks by hour of day, all days combined.</p>
       <svg id="hourChart" viewBox="0 0 480 220" role="img" aria-label="Kicks by hour of day"></svg>
     </section>
 
-    <section class="card">
+    <section class="card g-day">
       <h2>Kicks per day</h2>
       <p class="muted">The last 14 days.</p>
       <svg id="dayChart" viewBox="0 0 480 220" role="img" aria-label="Kicks per day"></svg>
     </section>
 
-    <section class="card">
+    <section class="card g-recent">
       <h2>Recent kicks</h2>
       <ul id="recent"></ul>
     </section>
 
-    <footer class="row">
+    <footer class="row g-foot">
       <button id="export" type="button" class="link">Export JSON</button>
       <label class="link">Import JSON<input id="import" type="file" accept="application/json" hidden></label>
     </footer>
