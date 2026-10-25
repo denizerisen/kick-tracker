@@ -184,8 +184,9 @@ button[type="submit"] {
   cursor: pointer;
 }
 
-#auth form { display: flex; gap: 8px; max-width: 460px; margin: 0 auto; }
-#auth input { flex: 1; }
+#auth form, #baby form { display: flex; gap: 8px; max-width: 460px; margin: 0 auto; }
+#auth input, #baby input { flex: 1; }
+#baby { margin: -8px 0 12px; }
 
 svg { width: 100%; height: auto; display: block; }
 svg text { fill: var(--muted); font-size: 10px; }

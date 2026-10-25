@@ -26,7 +26,8 @@
   <main>
     <header class="g-head">
       <h1 data-i18n="Kick Tracker">Kick Tracker</h1>
-      <p class="subtitle" data-i18n="Every little movement, remembered.">Every little movement, remembered.</p>
+      <p id="subtitle" class="subtitle">Every little movement, remembered.</p>
+      <p id="baby" class="muted"></p>
       <div id="auth" class="muted"></div>
     </header>
 
@@ -47,13 +48,13 @@
     </section>
 
     <section class="card g-hour">
-      <h2 data-i18n="When does the baby kick most?">When does the baby kick most?</h2>
+      <h2 id="hourTitle">When does the baby kick most?</h2>
       <p id="peak" class="peak" data-i18n="Kicks by hour of day, all days combined.">Kicks by hour of day, all days combined.</p>
       <svg id="hourChart" viewBox="0 0 480 220" role="img" aria-label="Kicks by hour of day" data-i18n-aria-label="Kicks by hour of day"></svg>
     </section>
 
     <section class="card g-day">
-      <h2 data-i18n="Kicks per day">Kicks per day</h2>
+      <h2 id="dayTitle">Kicks per day</h2>
       <p class="muted" data-i18n="The last 14 days.">The last 14 days.</p>
       <svg id="dayChart" viewBox="0 0 480 220" role="img" aria-label="Kicks per day" data-i18n-aria-label="Kicks per day"></svg>
     </section>

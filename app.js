@@ -34,8 +34,58 @@ function save() {
   }
 }
 
+const NAME_KEY = "kicktracker.babyName";
+const NAME_UNSYNCED_KEY = "kicktracker.babyNameUnsynced"; // "1" while a local edit hasn't been uploaded
+let babyName = "";
+let nameUnsynced = false;
+try {
+  babyName = localStorage.getItem(NAME_KEY) || "";
+  nameUnsynced = localStorage.getItem(NAME_UNSYNCED_KEY) === "1";
+} catch {}
+
+function saveName() {
+  try {
+    localStorage.setItem(NAME_KEY, babyName);
+    localStorage.setItem(NAME_UNSYNCED_KEY, nameUnsynced ? "1" : "");
+  } catch {}
+}
+
+function setBabyName(name) {
+  babyName = name.trim().slice(0, 40);
+  nameUnsynced = true;
+  saveName();
+  render();
+  sync();
+}
+
+// Last edit wins: a local edit is uploaded, otherwise the server's name is adopted.
+// Kept apart from kick sync so a missing profiles table can't block kicks.
+async function syncName() {
+  try {
+    if (nameUnsynced) {
+      const sent = babyName;
+      const { error } = await sb.from("profiles").upsert(
+        { user_id: session.user.id, baby_name: sent || null, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" });
+      if (error) throw error;
+      if (babyName === sent) { nameUnsynced = false; saveName(); }
+      return;
+    }
+    const { data, error } = await sb.from("profiles").select("baby_name").maybeSingle();
+    if (error) throw error;
+    if (data && !nameUnsynced && (data.baby_name || "") !== babyName) {
+      babyName = data.baby_name || "";
+      saveName();
+      render();
+    }
+  } catch (e) {
+    console.warn("name sync failed, will retry", e);
+  }
+}
+
 async function sync() {
   if (!sb || !session || !navigator.onLine) return;
+  syncName();
   try {
     if (deleted.size) {
       const { error } = await sb.from("kicks").delete().in("id", [...deleted]);
@@ -177,6 +227,60 @@ function drawBars(svg, bars, labelEvery = 1, peakIndex = -1) {
   });
 }
 
+// Text that mentions the baby: by name once one is set, generically before.
+function named(withName, generic, vars = {}) {
+  return babyName ? t(withName, { ...vars, name: babyName }) : t(generic, vars);
+}
+
+function renderName() {
+  document.getElementById("subtitle").textContent = named("Every little movement from {name}, remembered.", "Every little movement, remembered.");
+  document.getElementById("hourTitle").textContent = named("When does {name} kick most?", "When does the baby kick most?");
+  document.getElementById("dayTitle").textContent = named("{name}'s kicks per day", "Kicks per day");
+
+  const box = document.getElementById("baby");
+  if (editing(box)) return;
+  box.replaceChildren();
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "link";
+  if (babyName) {
+    edit.textContent = `${babyName} ✎`;
+    edit.setAttribute("aria-label", t("Edit baby's name"));
+  } else {
+    edit.textContent = t("Add baby's name");
+  }
+  edit.addEventListener("click", () => showNameEditor(box));
+  box.append(edit);
+}
+
+function showNameEditor(box) {
+  box.replaceChildren();
+  const form = document.createElement("form");
+  const input = document.createElement("input");
+  input.maxLength = 40;
+  input.value = babyName;
+  input.placeholder = t("Baby's name");
+  input.setAttribute("aria-label", t("Baby's name"));
+  const btn = document.createElement("button");
+  btn.type = "submit";
+  btn.textContent = t("Save");
+  form.append(input, btn);
+  box.append(form);
+  input.focus();
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    input.blur();
+    if (save) setBabyName(input.value); else renderName();
+  };
+  form.addEventListener("submit", (e) => { e.preventDefault(); finish(true); });
+  input.addEventListener("keydown", (e) => { if (e.key === "Escape") finish(false); });
+  // leaving the field saves (Safari doesn't focus Save on tap, so blur comes first)
+  input.addEventListener("blur", () => finish(true));
+}
+
 function renderCharts() {
   const byHour = Array.from({ length: 24 }, (_, h) => ({ label: String(h), value: 0 }));
   for (const { ts } of kicks) byHour[new Date(ts).getHours()].value++;
@@ -186,7 +290,7 @@ function renderCharts() {
   const peakIndex = peakValue ? byHour.findIndex(b => b.value === peakValue) : -1;
   document.getElementById("peak").textContent = peakIndex < 0
     ? t("Tap Kick! to start finding the pattern.")
-    : t("Most active around {hour}", { hour: hourLabel(peakIndex) });
+    : named("{name} is most active around {hour}", "Most active around {hour}", { hour: hourLabel(peakIndex) });
   drawBars(document.getElementById("hourChart"), byHour, 3, peakIndex);
 
   // last 14 days, including days with zero kicks
@@ -199,6 +303,11 @@ function renderCharts() {
     days.push({ label: `${d.getMonth() + 1}/${d.getDate()}`, value: counts.get(dayKey(d.getTime())) || 0 });
   }
   drawBars(document.getElementById("dayChart"), days, 2);
+}
+
+// Panels aren't rebuilt while someone is typing in them; committing the edit re-renders.
+function editing(box) {
+  return box.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
 }
 
 function renderRecent() {
@@ -222,6 +331,7 @@ function renderRecent() {
 function render() {
   const today = kicks.filter(({ ts }) => dayKey(ts) === dayKey(Date.now())).length;
   document.getElementById("today").innerHTML = `<b>${today}</b>${t(today === 1 ? "kick today · {total} total" : "kicks today · {total} total", { total: kicks.length })}`;
+  renderName();
   renderCharts();
   renderRecent();
 }

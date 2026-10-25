@@ -6,6 +6,15 @@ const LANGUAGES = ["en", "tr"];
 const tr = {
   "Kick Tracker": "Tekme Takibi",
   "Every little movement, remembered.": "Her küçük hareket hatırlanır.",
+  // Turkish name strings avoid suffixes on {name}: they follow vowel harmony (Ela'nın, Deniz'in).
+  "Every little movement from {name}, remembered.": "{name} — her küçük hareket hatırlanır.",
+  "When does {name} kick most?": "{name} en çok ne zaman tekmeliyor?",
+  "{name} is most active around {hour}": "{name} için en hareketli saat: {hour}",
+  "{name}'s kicks per day": "{name} — günlük tekme sayısı",
+  "Add baby's name": "Bebeğin adını ekle",
+  "Edit baby's name": "Bebeğin adını düzenle",
+  "Baby's name": "Bebeğin adı",
+  "Save": "Kaydet",
   "Toggle light and dark theme": "Açık ve koyu temayı değiştir",
   "Switch to Turkish": "Türkçe’ye geç",
   "Switch to English": "Switch to English",
