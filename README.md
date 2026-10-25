@@ -55,7 +55,4 @@ Secrets such as `.env.local` are git-ignored.
 
 ## Roadmap
 
-- Kick-count sessions ("10 kicks in how long?")
-- Other baby events (feeding, sleep, diapers)
-- Reminders
-- Share with a partner
+Open work is in [GitHub issues](https://github.com/denizerisen/kick-tracker/issues) and on the [project board](https://github.com/users/denizerisen/projects/3).
